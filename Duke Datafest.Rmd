@@ -1,0 +1,251 @@
+---
+title: "Duke Datafest EDA"
+author: "Best Duke Datafest Group"
+date: "2025-04-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(tidycensus)
+library(RColorBrewer)
+library(mapdata)
+Unemployment = read_csv("/Users/vrajhingoo/Downloads/Unemployment.csv", show_col_types = FALSE)
+Major_Market_Occupancy_Data_revised = read_csv("/Users/vrajhingoo/Downloads/Major_Market_Occupancy_Data-revised.csv")
+Price_and_Availability_Data = read_csv("/Users/vrajhingoo/Downloads/Price_and_Availability_Data.csv", show_col_types = FALSE)
+Leases = read_csv("/Users/vrajhingoo/Downloads/Leases.csv", show_col_types = FALSE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+***Data***
+
+```{r}
+Lease_data = Leases %>%
+  filter(leasedSF >= 10000, na.rm = TRUE) %>%
+  filter(internal_industry %in% c("Technology, Advertising, Media, and Information", "Financial Services and Insurance", "Legal Services"))
+
+MMO_data = Major_Market_Occupancy_Data_revised %>%
+  unite(Qyear, year, quarter) %>%
+  filter(Qyear != "2020_Q1") %>%
+  mutate(
+    Qyear_numeric = case_when(
+      Qyear == "2020_Q2" ~ 1,
+      Qyear == "2020_Q3" ~ 2,
+      Qyear == "2020_Q4" ~ 3,
+      Qyear == "2021_Q1" ~ 4,
+      Qyear == "2021_Q2" ~ 5,
+      Qyear == "2021_Q3" ~ 6,
+      Qyear == "2021_Q4" ~ 7,
+      Qyear == "2022_Q1" ~ 8,
+      Qyear == "2022_Q2" ~ 9,
+      Qyear == "2022_Q3" ~ 10,
+      Qyear == "2022_Q4" ~ 11,
+      Qyear == "2023_Q1" ~ 12,
+      Qyear == "2023_Q2" ~ 13,
+      Qyear == "2023_Q3" ~ 14,
+      Qyear == "2023_Q4" ~ 15,
+      Qyear == "2024_Q1" ~ 16,
+      Qyear == "2024_Q2" ~ 17,
+      Qyear == "2024_Q3" ~ 18,
+      Qyear == "2024_Q4" ~ 19
+    ) 
+  )
+
+PA = Price_and_Availability_Data %>%
+  filter(internal_class == "A") %>%
+  mutate(year = as.numeric(year)) %>%
+  group_by(year, quarter, market) %>%
+  summarize(total_available_space = sum(available_space, na.rm = TRUE))
+
+
+```
+
+***Question 1***
+
+Question: What is the trend in office usage by market since Q1 2020 in comparison to march 1st 2020?
+
+```{r}
+ggplot(MMO_data) +
+  geom_point(mapping = aes(x = Qyear_numeric, y = avg_occupancy_proportion, color = market), size = 2) +
+  geom_smooth(mapping = aes(x = Qyear_numeric, y = avg_occupancy_proportion, color = market), method = "loess", se = FALSE) +
+  scale_x_continuous(
+    breaks = 1:19, 
+    labels = c("2020_Q2", "2020_Q3", "2020_Q4", "2021_Q1", "2021_Q2", "2021_Q3", "2021_Q4",
+               "2022_Q1", "2022_Q2", "2022_Q3", "2022_Q4", "2023_Q1", "2023_Q2", "2023_Q3", "2023_Q4",
+               "2024_Q1", "2024_Q2", "2024_Q3", "2024_Q4")  
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + 
+          labs(title = "Trend in Office Usage by Market Since Q2 2020")
+```
+
+```{r}
+cor_results <- MMO_data %>%
+  group_by(market) %>%
+  summarise(correlation = cor(Qyear_numeric, avg_occupancy_proportion),
+            R_squared = correlation^2,
+            p_value = cor.test(Qyear_numeric, avg_occupancy_proportion)$p.value)
+
+cor_results
+```
+
+***Question 3***
+
+Question: What is the trend of available_space for internal_class A properties from 2018-2022 by market (use table Price_and_Availability_Data)?
+
+```{r}
+ggplot(PA, aes(x = year, y = total_available_space, color = market)) +
+  geom_smooth() +
+  geom_point() + theme_minimal() +
+  scale_x_continuous(
+    breaks = unique(PA$year),  
+    labels = unique(PA$year)
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = c(
+     "Atlanta" = "#F9A1D4",  # Light Pink
+    "Austin" = "#77B8D9",   # Light Blue
+    "Baltimore" = "#E9C4A5", # Light Beige
+    "Boston" = "#D21F2F",    # Red
+    "Charlotte" = "#31B8A9",  # Teal
+    "Chicago Suburbs" = "#F4C91F",  # Yellow
+    "Dallas-Ft. Worth" = "#1B67A3",  # Dark Blue
+    "Denver-Boulder" = "#9D62A1",  # Purple
+    "Detroit" = "#63A37C",  # Light Green
+    "Downtown Chicago" = "#F04E23", # Orange
+    "Houston" = "#87D95E",  # Lime Green
+    "Los Angeles" = "#D3A51B",  # Gold
+    "Manhattan" = "#B960B1", # Purple-Pink
+    "Nashville" = "#FF3B79", # Hot Pink
+    "Northern New Jersey" = "#70C4C3",  # Aqua
+    "Northern Virginia" = "#FCA659",  # Orange-Yellow
+    "Orange County (CA)" = "#D21A1C", # Dark Red
+    "Philadelphia" = "#6A8DAD",  # Dusty Blue
+    "Phoenix" = "#8A2E2F",  # Dark Red
+    "Raleigh-Durham" = "#66A21A",  # Olive Green
+    "Salt Lake City" = "#E74C89",  # Fuchsia
+    "San Diego" = "#55ACD7",  # Sky Blue
+    "San Francisco" = "#B4A1E4", # Lavender
+    "Seattle" = "#13D73E",   # Bright Green
+    "South Bay" = "#DF78D1",   # Pink-Purple
+    "South Florida" = "#1C6BA7",  # Blue
+    "Suburban Maryland" = "#D2D21E", # Yellow-Green
+    "Tampa" = "#FB7000",   # Orange
+    "US National" = "#A91385", # Magenta
+    "Washington DC" = "#3498DB"  # Blue
+  )) 
+```
+
+***Question 4***
+
+Question: Based on 2018-2024, where are industries signing leases by market
+```{r}
+
+older_leases <- Lease_data %>% 
+  filter(year == 2018) %>%
+  mutate(internal_industry = if_else(
+    internal_industry == "Financial Services and Insurance",
+    "Financial",
+    internal_industry
+  )) %>%
+  mutate(internal_industry = if_else(
+    internal_industry == "Technology, Advertising, Media, and Information",
+    "Technology",
+    internal_industry
+  ))  %>%
+  mutate(internal_industry = if_else(
+    internal_industry == "Legal Services",
+    "Legal",
+    internal_industry
+  )) %>%
+  group_by(market, internal_industry) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  mutate(market = as.factor(market))
+
+recent_leases <- Lease_data %>% 
+  filter(year == 2024) %>%
+  mutate(internal_industry = if_else(
+    internal_industry == "Financial Services and Insurance",
+    "Financial",
+    internal_industry
+  )) %>%
+  mutate(internal_industry = if_else(
+    internal_industry == "Technology, Advertising, Media, and Information",
+    "Technology",
+    internal_industry
+  ))  %>%
+  mutate(internal_industry = if_else(
+    internal_industry == "Legal Services",
+    "Legal",
+    internal_industry
+  )) %>%
+  group_by(market, internal_industry) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  mutate(market = as.factor(market))
+
+ 
+
+```
+
+```{r}
+ggplot(older_leases, aes(x = market, y = count, fill = internal_industry)) + 
+  geom_bar(stat = "identity", position = "stack") +
+  theme_minimal() + coord_flip() + geom_text(aes(label = count), 
+            position = position_stack(vjust = 0.5),  # center label in stacked bar
+            size = 3, color = "white") +  labs(title = "Lease Counts by Market and Industry (2018)",
+       x = "Market", y = "Lease Count", fill = "Industry")
+
+ggplot(recent_leases, aes(x = market, y = count, fill = internal_industry)) + 
+  geom_bar(stat = "identity", position = "stack") +
+  theme_minimal() + coord_flip() + geom_text(aes(label = count), 
+            position = position_stack(vjust = 0.5),  # center label in stacked bar
+            size = 3, color = "white") + labs(title = "Lease Counts by Market and Industry (2024)",
+       x = "Market", y = "Lease Count", fill = "Industry")
+
+```
+
+```{r}
+older_sector_summary <- older_leases %>%
+  group_by(internal_industry) %>%
+  summarise(total_count = sum(count)) %>%
+  mutate(percentage = total_count / sum(total_count) * 100)  
+
+
+ggplot(older_sector_summary, aes(x = "", y = total_count, fill = internal_industry)) + 
+  geom_bar(stat = "identity", width = 1) + 
+  coord_polar(theta = "y") +  
+  labs(title = "Distribution of Leases by Sector in the United States in 2018") +
+  theme_void() +  
+  theme(legend.title = element_blank()) + 
+  geom_text(aes(label = paste(round(percentage, 2), "%")), position = position_stack(vjust = 0.5))
+
+
+recent_sector_summary <- recent_leases %>%
+  group_by(internal_industry) %>%
+  summarise(total_count = sum(count)) %>%
+  mutate(percentage = total_count / sum(total_count) * 100)  
+
+
+ggplot(recent_sector_summary, aes(x = "", y = total_count, fill = internal_industry)) + 
+  geom_bar(stat = "identity", width = 1) + 
+  coord_polar(theta = "y") +  
+  labs(title = "Distribution of Leases by Sector in the United States in 2024") +
+  theme_void() +  
+  theme(legend.title = element_blank()) +  
+  geom_text(aes(label = paste(round(percentage, 2), "%")), position = position_stack(vjust = 0.5))
+```
+
+
+
